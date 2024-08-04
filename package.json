@@ -1,0 +1,17 @@
+{
+  "name": "golfhackmud",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "watch": "bun run --watch index.ts '{test:\"test\"}'",
+    "golf": "bun run index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "chalk": "^5.3.0",
+    "hackmud-script-manager": "^0.20.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
