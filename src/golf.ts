@@ -28,17 +28,24 @@ type Session = {
     readonly type: "session";
 };
 
+type returnType =
+    | {
+          ok: boolean;
+          msg?: string;
+      }
+    | string;
+
 const gameId = "golf_";
 
 const putGreen = "`M▓`";
 const fairwayGreen = "`L▓`";
 const bunkerSand = "`I▒`";
 const darkGreen = "`l░`";
-const ballColor = "`R▓`";
+const ballColor = "`R█`";
 const holeColor = "`X▓`";
 
 const mapWidth = 80;
-const mapHeight = 60;
+const mapHeight = 57;
 const mapHeightOffset = 5;
 const terminalWidth = mapWidth + 14;
 const terminalHeight = mapHeight + mapHeightOffset;
@@ -65,7 +72,7 @@ For rules and instructions see \`Nrules\`:\`Vtrue\`
 To start a new game see view the current maps with \`Nmaps\`:\`Vtrue\` and start with \`Nstart\`:\`VmapId\`
 `;
 
-export default (context: Context, args?: any): string | { ok: boolean; msg: string } => {
+export default (context: Context, args?: any): returnType => {
     const lib = $fs.scripts.lib();
 
     // Check width and height
@@ -73,7 +80,7 @@ export default (context: Context, args?: any): string | { ok: boolean; msg: stri
         return {
             ok: false,
             msg: `Terminal too small to run game\nTry setting your scale lower with gui.size {i:-1}. Or by making your right side smaller.
-            \nCurrent \`Vrows\`X\`Vcols\`: \`V${context.cols}\`x\`V${context.rows}\`\nNeed at least \`V${terminalWidth}\`x\`V${terminalHeight}\``,
+            \nCurrent \`Vrows\`X\`Vcols\`: \`V${context.cols}\`x\`V${context.rows}\`\nNeed at least \`V${terminalWidth}\`x\`V${terminalHeight+4}\``,
         };
     }
 
@@ -82,18 +89,9 @@ export default (context: Context, args?: any): string | { ok: boolean; msg: stri
         return showRules();
     }
 
-    // Insert a new map if we are owner
+    // Insert a new map if we are script owner
     if (args?.insert_map && lib.caller_is_owner(context)) {
-        let insertedMapData = args.insert_map as MapData;
-
-        if (insertedMapData.type !== "map" || insertedMapData._id == undefined) {
-            return {
-                ok: false,
-                msg: "Invalid map data",
-            };
-        }
-
-        $db.us({ _id: insertedMapData._id }, insertedMapData);
+        return insertMap(args.insert_map);
     }
 
     // Get the session
@@ -129,51 +127,14 @@ export default (context: Context, args?: any): string | { ok: boolean; msg: stri
         return startScreen;
     }
 
-    for (let y = 0; y < terminalHeight; y++) {
-        drawBuffer[y] = [];
-        for (let x = 0; x < terminalWidth; x++) {
-            drawBuffer[y][x] = " ";
-        }
-    }
 
-    for (let y = 0; y < mapHeight; y++) {
-        map[y] = [];
-        for (let x = 0; x < mapWidth; x++) {
-            map[y][x] = darkGreen;
-        }
-    }
-
-    drawCoords(mapData.boundsCoords, fairwayGreen);
-    fillCoords(mapData.boundsCoords, fairwayGreen);
-
-    drawCoords(mapData.putCoords, putGreen);
-    fillCoords(mapData.putCoords, putGreen);
-
-    for (let i = 0; i < mapData.bunkerCoords.length; i++) {
-        drawCoords(mapData.bunkerCoords[i], bunkerSand);
-        fillCoords(mapData.bunkerCoords[i], bunkerSand);
-    }
-
-    // Draw start point
-    for (let i = mapData.startPoint.y - 1; i <= mapData.startPoint.y + 1; i++) {
-        for (let j = mapData.startPoint.x - 1; j <= mapData.startPoint.x + 1; j++) {
-            if (i >= 0 && j >= 0 && i < mapHeight && j < mapWidth) {
-                map[i][j] = putGreen;
-            }
-        }
-    }
-
-    map[mapData.startPoint.y][mapData.startPoint.x] = ballColor;
-    map[mapData.endPoint.y][mapData.endPoint.x] = holeColor;
-
-    drawMap();
-    drawSideBar();
+    draw();
 
     return drawBufferToString();
 };
 
 function correctWidthAndHeight(columns: number, rows: number): boolean {
-    if (columns < terminalWidth || rows < terminalHeight) {
+    if (columns < terminalWidth || rows < terminalHeight+4) {
         return false;
     }
 
@@ -202,6 +163,18 @@ On the last hole the game ends you will get your final score. You can see how ma
 
 Have fun!
 `;
+}
+
+function insertMap(insertData: object): returnType {
+    let insertedMapData = insertData as MapData;
+
+    if (insertedMapData.type !== "map" || insertedMapData._id == undefined) {
+        return { ok: false, msg: "Invalid map data" };
+    }
+
+    $db.us({ _id: insertedMapData._id }, insertedMapData);
+
+    return { ok: true, msg: "Map inserted" };
 }
 
 function getSession(userName: string): Session {
@@ -279,6 +252,48 @@ function updateDBSession(): void {
 }
 
 //#region drawing
+function draw(): void {
+    for (let y = 0; y < terminalHeight; y++) {
+        drawBuffer[y] = [];
+        for (let x = 0; x < terminalWidth; x++) {
+            drawBuffer[y][x] = " ";
+        }
+    }
+
+    for (let y = 0; y < mapHeight; y++) {
+        map[y] = [];
+        for (let x = 0; x < mapWidth; x++) {
+            map[y][x] = darkGreen;
+        }
+    }
+
+    drawCoords(mapData.boundsCoords, fairwayGreen);
+    fillCoords(mapData.boundsCoords, fairwayGreen);
+
+    drawCoords(mapData.putCoords, putGreen);
+    fillCoords(mapData.putCoords, putGreen);
+
+    for (let i = 0; i < mapData.bunkerCoords.length; i++) {
+        drawCoords(mapData.bunkerCoords[i], bunkerSand);
+        fillCoords(mapData.bunkerCoords[i], bunkerSand);
+    }
+
+    // Draw start point
+    for (let i = mapData.startPoint.y - 1; i <= mapData.startPoint.y + 1; i++) {
+        for (let j = mapData.startPoint.x - 1; j <= mapData.startPoint.x + 1; j++) {
+            if (i >= 0 && j >= 0 && i < mapHeight && j < mapWidth) {
+                map[i][j] = putGreen;
+            }
+        }
+    }
+
+    map[mapData.startPoint.y][mapData.startPoint.x] = ballColor;
+    map[mapData.endPoint.y][mapData.endPoint.x] = holeColor;
+
+    drawMap();
+    drawSideBar();
+}
+
 function fillCoords(coords: Point[], color: string): void {
     for (let y = 0; y < mapHeight; y++) {
         for (let x = 0; x < mapWidth; x++) {

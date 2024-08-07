@@ -41,6 +41,7 @@ await closeDb();
 
 function hackmudColorToTerminal(input: string) {
     input = input.replace(/(\w+)\.(\w+)/g, "`C$1`.`L$2`")
+    input = input.replace(/(\w+): (\w+)/g, "`N$1`: `V$2`")
 
     const colorMap = {
         "0": chalk.hex("#9B9B9B"),
