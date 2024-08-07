@@ -2,9 +2,8 @@ import golf from "./src/golf";
 import chalk from "chalk";
 import {closeDb, startDb} from "./src/db-emu";
 
-const fs = require("fs");
-
 let argv = process.argv.slice(2);
+
 let args = eval("(" + argv[0] + ")");
 let context: CLIContext = {
     caller: "hacker",
@@ -15,6 +14,17 @@ let context: CLIContext = {
 };
 
 await startDb()
+
+// @ts-ignore
+global.$fs = {
+    scripts: {
+        lib: () => {
+            return {
+                caller_is_owner: () => true
+            }
+        }
+    }
+}
 
 let output = golf(context, args);
 if (typeof output !== "string") {

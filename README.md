@@ -24,6 +24,12 @@ or just use your favorite package manager
 To run:
 Here you can give the argument like you would do in hackmud
 
+> Important due to a bug with bun where it always escapes all strings we need to use yarn or npm here. Possibly this bug https://github.com/oven-sh/bun/issues/7667
+
 ```bash
-bun golf '{foo:"bar"}'
+yarn golf '{foo:"bar"}'
+```
+or if you really want to directly use bun
+```bash
+bun run index.ts
 ```

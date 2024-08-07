@@ -76,6 +76,10 @@ function update(query: any, update: MongoCommand) {
                 }
                 item[key].push(update.$push[key]);
             }
+        } else {
+            for (const key in update) {
+                item[key] = update[key];
+            }
         }
     }
 }
@@ -91,6 +95,12 @@ function us(query: Query, updateCommand: MongoCommand) {
         let updateObject
         if (updateCommand.$set) {
             updateObject = updateCommand.$set
+        } else if (updateCommand.$unset) {
+            console.error("$unset not implemented yet");
+        } else if (updateCommand.$push) {
+            console.error("$push not implemented yet");
+        } else {
+            updateObject = updateCommand
         }
 
 

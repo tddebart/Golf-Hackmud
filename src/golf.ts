@@ -1,4 +1,5 @@
 type MapData = {
+    _id: string;
     boundsCoords: Point[];
     putCoords: Point[];
     bunkerCoords: Point[][];
@@ -8,6 +9,7 @@ type MapData = {
     courseName: string;
     holeNumber: number;
     totalHoleCount: number;
+    readonly type: "map";
 };
 
 type Point = {
@@ -23,6 +25,7 @@ type Session = {
     lastUpdate: number;
     courseScores: number[];
     strokeCount: number;
+    readonly type: "session";
 };
 
 const gameId = "golf_";
@@ -41,46 +44,8 @@ const terminalWidth = mapWidth + 14;
 const terminalHeight = mapHeight + mapHeightOffset;
 const map: string[][] = [];
 const drawBuffer: string[][] = [];
-const mapData: MapData = {
-    boundsCoords: [
-        { x: 32, y: 52 },
-        { x: 29, y: 27 },
-        { x: 23, y: 16 },
-        { x: 23, y: 9 },
-        { x: 41, y: 4 },
-        { x: 56, y: 8 },
-        { x: 54, y: 23 },
-        { x: 51, y: 52 },
-    ],
-    putCoords: [
-        { x: 33, y: 9 },
-        { x: 29, y: 13 },
-        { x: 34, y: 18 },
-        { x: 40, y: 13 },
-    ],
-    bunkerCoords: [
-        [
-            { x: 30, y: 41 },
-            { x: 30, y: 36 },
-            { x: 53, y: 34 },
-            { x: 52, y: 40 },
-        ],
-        [
-            { x: 31, y: 22 },
-            { x: 39, y: 18 },
-            { x: 41, y: 21 },
-            { x: 39, y: 25 },
-            { x: 33, y: 27 },
-        ],
-    ],
-    startPoint: { x: 45, y: 49 },
-    endPoint: { x: 34, y: 13 },
-    mapId: 1,
-    courseName: "Course 1",
-    holeNumber: 1,
-    totalHoleCount: 18,
-};
 
+let mapData: MapData = null;
 let session: Session = null;
 
 const startScreen = `
@@ -97,11 +62,13 @@ const startScreen = `
 Welcome to coolmath.golf.
 
 For rules and instructions see \`Nrules\`:\`Vtrue\`
-
-
+To start a new game see view the current maps with \`Nmaps\`:\`Vtrue\` and start with \`Nstart\`:\`VmapId\`
 `;
 
 export default (context: Context, args?: any): string | { ok: boolean; msg: string } => {
+    const lib = $fs.scripts.lib();
+
+    // Check width and height
     if (!correctWidthAndHeight(context.cols, context.rows)) {
         return {
             ok: false,
@@ -110,14 +77,56 @@ export default (context: Context, args?: any): string | { ok: boolean; msg: stri
         };
     }
 
+    // Show rules on rules:true
     if (args?.rules) {
         return showRules();
     }
 
+    // Insert a new map if we are owner
+    if (args?.insert_map && lib.caller_is_owner(context)) {
+        let insertedMapData = args.insert_map as MapData;
+
+        if (insertedMapData.type !== "map" || insertedMapData._id == undefined) {
+            return {
+                ok: false,
+                msg: "Invalid map data",
+            };
+        }
+
+        $db.us({ _id: insertedMapData._id }, insertedMapData);
+    }
+
+    // Get the session
     session = getSession(context.caller);
 
+    // Reset on reset:true
+    if (args?.reset) {
+        if (!args?.confirm) {
+            return "Are you sure you want to reset to the start menu? To continue, type `Nconfirm`:`Vtrue`";
+        }
+        resetGame();
+    }
+
+    if (args?.start != undefined) {
+        if (session.mapId != -1) {
+            // We are already in a game so ask if we want to start a new one
+            if (!args?.confirm) {
+                return "Are you sure you want to start a new game? This will end your current session and is not reversible. To continue, type `Nconfirm`:`Vtrue`";
+            } else {
+                resetGame();
+            }
+        } else {
+            // We are not in a game so start a new one without confirmation
+            startGame(args.start);
+        }
+    }
+
+    // Get the mapData
+    mapData = getMapData();
+
+    // Show start screen if we have no valid map
     if (!args || session.mapId == -1) {
-        // return startScreen;
+        return startScreen;
     }
 
     for (let y = 0; y < terminalHeight; y++) {
@@ -145,6 +154,15 @@ export default (context: Context, args?: any): string | { ok: boolean; msg: stri
         fillCoords(mapData.bunkerCoords[i], bunkerSand);
     }
 
+    // Draw start point
+    for (let i = mapData.startPoint.y - 1; i <= mapData.startPoint.y + 1; i++) {
+        for (let j = mapData.startPoint.x - 1; j <= mapData.startPoint.x + 1; j++) {
+            if (i >= 0 && j >= 0 && i < mapHeight && j < mapWidth) {
+                map[i][j] = putGreen;
+            }
+        }
+    }
+
     map[mapData.startPoint.y][mapData.startPoint.x] = ballColor;
     map[mapData.endPoint.y][mapData.endPoint.x] = holeColor;
 
@@ -163,8 +181,7 @@ function correctWidthAndHeight(columns: number, rows: number): boolean {
 }
 
 function showRules(): string {
-    return `
-You are going to see a map of the golf course from a top down perspective.
+    return `You are going to see a map of the golf course from a top down perspective.
 
 Made up from the following colors
 
@@ -174,15 +191,28 @@ ${putGreen} - Putt Area
 ${bunkerSand} - Bunker
 ${ballColor} - Ball
 ${holeColor} - Hole
+
+The goal of the game is to get the ball into the hole in the least number of strokes.
+
+- Each time you move the ball, you will be charged a stroke.
+- If you put the ball in the hole, you will be rewarded with the number of strokes it took to get there.
+
+The map will end when you get the ball into the hole or if you run out of moves. You will then go to the next hole.
+On the last hole the game ends you will get your final score. You can see how many holes there are on the right side while playing the game.
+
+Have fun!
 `;
 }
 
 function getSession(userName: string): Session {
-    let session = $db.f({ _id: gameId + userName }).first() as unknown as Session;
+    const id = gameId + "session_" + userName;
+
+    let session = $db.f({ _id: id }).first() as unknown as Session;
 
     if (!session) {
         session = {
-            _id: gameId + userName,
+            _id: id,
+            type: "session",
             mapId: -1,
             holeNumber: 0,
             ballPos: { x: 0, y: 0 },
@@ -191,12 +221,61 @@ function getSession(userName: string): Session {
             courseScores: [],
         };
 
-        for (let i = 0; i < mapData.totalHoleCount; i++) {
-            session.courseScores.push(0);
-        }
+        $db.i(session);
     }
 
     return session as Session;
+}
+
+function getMapData(): MapData | null {
+    if (session.mapId == -1) {
+        return null;
+    }
+
+    let foundMapData = $db
+        .f({ type: "map", mapId: session.mapId, holeNumber: session.holeNumber })
+        .first() as MapData | null;
+
+    if (foundMapData == null) {
+        logError(
+            "Could not find map with id: " +
+                session.mapId +
+                " and holeNumber: " +
+                session.holeNumber,
+        );
+    }
+
+    // Setup session if we just started
+    if (session.strokeCount == -1) {
+        session.strokeCount = 0;
+        session.ballPos = foundMapData.startPoint;
+        for (let i = 0; i < foundMapData.totalHoleCount; i++) {
+            session.courseScores[i] = 0;
+        }
+    }
+
+    return foundMapData as MapData;
+}
+
+function startGame(mapId: number): void {
+    session.mapId = mapId;
+    session.holeNumber = 0;
+    session.ballPos = { x: -1, y: -1 };
+    session.lastUpdate = Date.now();
+    session.strokeCount = -1;
+    session.courseScores = [];
+
+    updateDBSession();
+}
+
+function resetGame(): void {
+    session.mapId = -1;
+
+    updateDBSession();
+}
+
+function updateDBSession(): void {
+    $db.us({ _id: session._id }, session);
 }
 
 //#region drawing
@@ -282,7 +361,7 @@ function drawSideBar(): void {
     }
 
     // Draw holeNumber
-    let holeNumberText = `Hole ${mapData.holeNumber.toString().padStart(2, "0")}`;
+    let holeNumberText = `Hole ${(mapData.holeNumber + 1).toString().padStart(2, "0")}`;
     for (let i = 0; i < holeNumberText.length; i++) {
         drawBuffer[mapHeightOffset + 4][mapWidth + 3 + i] = holeNumberText[i];
     }
@@ -300,10 +379,19 @@ function drawSideBar(): void {
     }
     for (let i = 0; i < session.courseScores.length; i++) {
         let score = session.courseScores[i];
-        let scoreText = `${i.toString().padStart(2, "0")} - ${score.toString().padStart(2, "0")}`;
+        let scoreText = `${(i + 1).toString().padStart(2, "0")} - ${score.toString().padStart(2, "0")}`;
         for (let j = 0; j < scoreText.length; j++) {
             drawBuffer[mapHeightOffset + 11 + i][mapWidth + 3 + j] = scoreText[j];
         }
+    }
+    // Total score
+    let totalScoreText = `Total: ${session.courseScores
+        .reduce((a, b) => a + b)
+        .toString()
+        .padStart(2, "0")}`;
+    for (let i = 0; i < totalScoreText.length; i++) {
+        drawBuffer[mapHeightOffset + 12 + session.courseScores.length][mapWidth + 3 + i] =
+            totalScoreText[i];
     }
 
     // Draw date
@@ -336,3 +424,9 @@ function drawBufferToString(): string {
     return output;
 }
 //#endregion
+
+function logError(msg: string): void {
+    throw new Error(
+        msg + "\nIf you think this was a error, please report this to me with chats.tell",
+    );
+}
