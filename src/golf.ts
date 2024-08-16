@@ -9,7 +9,7 @@ type MapData = {
     courseName: string;
     holeNumber: number;
     totalHoleCount: number;
-    readonly type: "map";
+    readonly type: "golf_map";
 };
 
 type Point = {
@@ -25,7 +25,7 @@ type Session = {
     lastUpdate: number;
     courseScores: number[];
     strokeCount: number;
-    readonly type: "session";
+    readonly type: "golf_session";
 };
 
 type returnType =
@@ -80,7 +80,7 @@ export default (context: Context, args?: any): returnType => {
         return {
             ok: false,
             msg: `Terminal too small to run game\nTry setting your scale lower with gui.size {i:-1}. Or by making your right side smaller.
-            \nCurrent \`Vrows\`X\`Vcols\`: \`V${context.cols}\`x\`V${context.rows}\`\nNeed at least \`V${terminalWidth}\`x\`V${terminalHeight+4}\``,
+            \nCurrent \`Vrows\`X\`Vcols\`: \`V${context.cols}\`x\`V${context.rows}\`\nNeed at least \`V${terminalWidth}\`x\`V${terminalHeight + 4}\``,
         };
     }
 
@@ -127,14 +127,13 @@ export default (context: Context, args?: any): returnType => {
         return startScreen;
     }
 
-
     draw();
 
     return drawBufferToString();
 };
 
 function correctWidthAndHeight(columns: number, rows: number): boolean {
-    if (columns < terminalWidth || rows < terminalHeight+4) {
+    if (columns < terminalWidth || rows < terminalHeight + 4) {
         return false;
     }
 
@@ -168,7 +167,7 @@ Have fun!
 function insertMap(insertData: object): returnType {
     let insertedMapData = insertData as MapData;
 
-    if (insertedMapData.type !== "map" || insertedMapData._id == undefined) {
+    if (insertedMapData.type !== "golf_map" || insertedMapData._id == undefined) {
         return { ok: false, msg: "Invalid map data" };
     }
 
@@ -185,7 +184,7 @@ function getSession(userName: string): Session {
     if (!session) {
         session = {
             _id: id,
-            type: "session",
+            type: "golf_session",
             mapId: -1,
             holeNumber: 0,
             ballPos: { x: 0, y: 0 },
@@ -287,7 +286,7 @@ function draw(): void {
         }
     }
 
-    map[mapData.startPoint.y][mapData.startPoint.x] = ballColor;
+    map[session.ballPos.y][session.ballPos.x] = ballColor;
     map[mapData.endPoint.y][mapData.endPoint.x] = holeColor;
 
     drawMap();
