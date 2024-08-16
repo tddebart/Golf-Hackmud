@@ -1,12 +1,15 @@
 import golf from "./src/golf";
+import games from "./src/games";
+import qr from "./src/qr";
 import chalk from "chalk";
 import {closeDb, startDb} from "./src/db-emu";
 
 let argv = process.argv.slice(2);
 
-let args = eval("(" + argv[0] + ")");
+let script = argv[0];
+let args = eval("(" + argv[1] + ")");
 let context: CLIContext = {
-    caller: "hacker",
+    caller: "coolmath",
     this_script: "golf",
     cols: 110,
     rows: 90,
@@ -26,9 +29,22 @@ global.$fs = {
     }
 }
 
-let output = golf(context, args);
+let output;
+
+if (script == "golf") {
+    output = golf(context, args);
+} else if (script == "game") {
+    output = games(context, args);
+} else if (script == "qr") {
+    output = qr(context, args);
+}
+
 if (typeof output !== "string") {
-    output = output?.msg;
+    if (output?.msg !== undefined) {
+        output = output?.msg;
+    } else {
+        output = JSON.stringify(output, null, 2);
+    }
 }
 if (output === undefined) {
     console.error("No output");

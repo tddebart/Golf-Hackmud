@@ -11,7 +11,8 @@
   },
   "scripts": {
     "watch": "bun run --watch index.ts '{test:\"test\"}'",
-    "golf": "bun run index.ts",
+    "golf": "bun run index.ts golf",
+    "games": "bun run index.ts games",
     "mongodb": "mongod --dbpath=./db-data"
   },
   "type": "module",

@@ -39,6 +39,10 @@ function remove(query: Query) {
 
 function find(query: any): {first: () => any|null, array: () => any[], count: () => number} {
     let results = localData.filter((d: any) => {
+        if (Object.keys(query).length == 0) {
+            return true;
+        }
+
         for (let key in query) {
             if (query[key] !== d[key]) {
                 return false;
