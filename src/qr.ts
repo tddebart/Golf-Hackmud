@@ -1,11 +1,10 @@
-let preBits: (number|null)[] = [];
+let preBits: (number | null)[] = [];
 let readBits: number[] = [];
 let deleafedBits: number[] = [];
 let rowLength = 49;
 let groups: number[][] = [];
 let totalDataCodewords: number = 0;
 let version = 8;
-
 let ignoreMask: boolean[][] = [];
 
 export default (context: Context, args?: any): any => {
@@ -40,35 +39,35 @@ export default (context: Context, args?: any): any => {
 
     // Get rowLength
     let rows = qrCode.slice(1).split("\n");
-    rowLength = rows[0].length
+    rowLength = rows[0].length;
 
     // Initialize empty array
-    for (let i = 0; i < rowLength*rowLength; i++) {
+    for (let i = 0; i < rowLength * rowLength; i++) {
         preBits.push(null);
-    };
+    }
 
     fillIgnoreMask();
 
     for (let i = 0; i < rows.length; i++) {
         let row = rows[i];
         for (let j = 0; j < rowLength; j++) {
-            let index = i*2*rowLength + j;
+            let index = i * 2 * rowLength + j;
             switch (row[j]) {
                 case "█":
                     preBits[index] = 1;
-                    preBits[index+rowLength] = 1;
+                    preBits[index + rowLength] = 1;
                     break;
                 case "▀":
                     preBits[index] = 1;
-                    preBits[index+rowLength] = 0;
+                    preBits[index + rowLength] = 0;
                     break;
                 case "▄":
                     preBits[index] = 0;
-                    preBits[index+rowLength] = 1;
+                    preBits[index + rowLength] = 1;
                     break;
                 case " ":
                     preBits[index] = 0;
-                    preBits[index+rowLength] = 0;
+                    preBits[index + rowLength] = 0;
                     break;
             }
         }
@@ -76,7 +75,7 @@ export default (context: Context, args?: any): any => {
     // Remove last row cause it doesn't exist
     // console.log(preBits.splice(-rowLength, rowLength));
 
-    visualizeBytes(preBits)
+    visualizeBytes(preBits);
 
     let patternIndex = getPatternIndex();
     initGroups();
@@ -92,11 +91,11 @@ export default (context: Context, args?: any): any => {
     let output = "";
 
     for (let i = 0; i < length; i++) {
-        output += String.fromCharCode(readBitNumber(12+i*8, 8));
+        output += String.fromCharCode(readBitNumber(12 + i * 8, 8));
     }
 
     return output;
-}
+};
 
 function getLength(): number {
     return readBitNumber(4, 8);
@@ -126,24 +125,25 @@ function initGroups(): void {
     const ecIndex = ecLevelToIndex[errorCorrectionLevel];
 
     switch (rowLength) {
-        case 49: version = 8; break;
-        case 53: version = 9; break;
+        case 49:
+            version = 8;
+            break;
+        case 53:
+            version = 9;
+            break;
     }
 
-    groups = codewordGroups[version-8][ecIndex];
+    groups = codewordGroups[version - 8][ecIndex];
 
-    totalDataCodewords = groups.reduce(
-        (sum, [blocks, codewords]) => sum + (blocks * codewords), 0
-    );
+    totalDataCodewords = groups.reduce((sum, [blocks, codewords]) => sum + blocks * codewords, 0);
 }
 
 function readAllBytes(patternIndex: number): void {
-    let readPosX = rowLength-1;
-    let readPosY = rowLength-1;
+    let readPosX = rowLength - 1;
+    let readPosY = rowLength - 1;
     let upDir = true;
 
-    for (let i = totalDataCodewords*8; i > 0; i--) {
-
+    for (let i = totalDataCodewords * 8; i > 0; i--) {
         if (!ignoreMask[readPosY][readPosX]) {
             let readBit = preBits[readPosY * rowLength + readPosX];
 
@@ -155,7 +155,7 @@ function readAllBytes(patternIndex: number): void {
 
             readBits.push(readBit);
         } else {
-            i++
+            i++;
         }
 
         if (readPosX % 2 == 0) {
@@ -197,9 +197,10 @@ function deinterleaveBytes(): void {
         }
     }
 
-    console.log(readBits.join(''));
+    // console.log(readBits.join(""));
 
-    const readReadBitNumber = (index, length) => parseInt(readBits.slice(index, index+length).join(''), 2);
+    const readReadBitNumber = (index, length) =>
+        parseInt(readBits.slice(index, index + length).join(""), 2);
 
     let groupIndex = 0;
     let blockIndex = 0;
@@ -207,7 +208,7 @@ function deinterleaveBytes(): void {
     for (let i = 0; i < totalDataCodewords; i++) {
         let [blocks, codewords] = groups[groupIndex];
         if (groupData[groupIndex][blockIndex].length < codewords) {
-            groupData[groupIndex][blockIndex].push(readReadBitNumber(i*8, 8));
+            groupData[groupIndex][blockIndex].push(readReadBitNumber(i * 8, 8));
         } else {
             i--;
         }
@@ -225,33 +226,38 @@ function deinterleaveBytes(): void {
 
     console.log(groupData);
 
-    deleafedBits = groupData.flat(3).map((x: number) => x.toString(2).padStart(8, '0').split('')).flat().map(x => parseInt(x));
+    deleafedBits = groupData
+        .flat(3)
+        .map((x: number) => x.toString(2).padStart(8, "0").split(""))
+        .flat()
+        .map((x) => parseInt(x));
 }
 
 function validateEncoding(): void {
     let encoding = readBitNumber(0, 4);
     if (encoding != 0b0100) {
-        throw new Error("Invalid encoding expected binary but got " + encoding.toString(2).padStart(4, '0'));
+        throw new Error(
+            "Invalid encoding expected binary but got " + encoding.toString(2).padStart(4, "0"),
+        );
     }
 }
 
 function readBitNumber(index: number, length: number): number {
-    let value = deleafedBits.slice(index, index+length).join('');
+    let value = deleafedBits.slice(index, index + length).join("");
     return parseInt(value, 2);
-};
-
+}
 
 function getPatternIndex(): number {
-    let patternBit3 = preBits[(rowLength-3)*rowLength+8] ^ 1;
-    let patternBit2 = preBits[(rowLength-4)*rowLength+8] ^ 0;
-    let patternBit1 = preBits[(rowLength-5)*rowLength+8] ^ 1;
+    let patternBit3 = preBits[(rowLength - 3) * rowLength + 8] ^ 1;
+    let patternBit2 = preBits[(rowLength - 4) * rowLength + 8] ^ 0;
+    let patternBit1 = preBits[(rowLength - 5) * rowLength + 8] ^ 1;
 
     return parseInt(`${patternBit3}${patternBit2}${patternBit1}`, 2);
 }
 
 function getErrorCorrectionLevel(): number {
-    let patternBit2 = preBits[(rowLength-1)*rowLength+8] ^ 1;
-    let patternBit1 = preBits[(rowLength-2)*rowLength+8] ^ 0;
+    let patternBit2 = preBits[(rowLength - 1) * rowLength + 8] ^ 1;
+    let patternBit1 = preBits[(rowLength - 2) * rowLength + 8] ^ 0;
 
     return parseInt(`${patternBit2}${patternBit1}`, 2);
 }
@@ -273,7 +279,7 @@ function doesHitPattern(x: number, y: number, patternIndex: number): boolean {
     }
 }
 
-function visualizeBytes(bytes: (number|null)[]) {
+function visualizeBytes(bytes: (number | null)[]) {
     let output = "";
     console.log(bytes.length);
 
@@ -303,33 +309,36 @@ function fillIgnoreMask() {
                 ignoreMask[y][x] = true;
             }
         }
-    }
+    };
 
-    ignoreMask = Array.from({length: rowLength+1}, () => Array(rowLength+1).fill(false));
+    ignoreMask = Array.from({ length: rowLength + 1 }, () => Array(rowLength + 1).fill(false));
 
+    const end = rowLength - 1;
 
-    const end = rowLength-1;
-
-    setRectangle(end-10, 0, end, 6);
-    setRectangle(end-7, 6, end, 8);
-    setRectangle(8, 6, end-10,6);
+    setRectangle(end - 10, 0, end, 6);
+    setRectangle(end - 7, 6, end, 8);
+    setRectangle(8, 6, end - 10, 6);
 
     let center = null;
     switch (version) {
-        case 8: center = [24, 42+2]; break;
-        case 9: center = [26-2, 46-2]; break;
+        case 8:
+            center = [24, 42 + 2];
+            break;
+        case 9:
+            center = [26 - 2, 46 - 2];
+            break;
     }
 
     const alignmentPositions = [
-        [4, Math.floor(rowLength/2)],
-        [Math.floor(rowLength/2),  Math.floor(rowLength/2)],
-        [rowLength-7, Math.floor(rowLength/2)],
-        [Math.floor(rowLength/2), rowLength-7],
-        [Math.floor(rowLength/2), 6],
-        [rowLength-7, rowLength-7],
-    ]
+        [4, Math.floor(rowLength / 2)],
+        [Math.floor(rowLength / 2), Math.floor(rowLength / 2)],
+        [rowLength - 7, Math.floor(rowLength / 2)],
+        [Math.floor(rowLength / 2), rowLength - 7],
+        [Math.floor(rowLength / 2), 6],
+        [rowLength - 7, rowLength - 7],
+    ];
 
     for (const pos of alignmentPositions) {
-        setRectangle(pos[0]-2, pos[1]-2, pos[0]+2, pos[1]+2);
+        setRectangle(pos[0] - 2, pos[1] - 2, pos[0] + 2, pos[1] + 2);
     }
 }
