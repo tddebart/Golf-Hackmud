@@ -1,10 +1,7 @@
 let preBits: (number | null)[] = [];
-let readBits: number[] = [];
 let deleafedBits: number[] = [];
 let rowLength = 49;
-let groups: number[][] = [];
 let totalDataCodewords: number = 0;
-let version = 8;
 let ignoreMask: boolean[][] = [];
 
 export default (context: Context, args?: any): any => {
@@ -46,8 +43,33 @@ export default (context: Context, args?: any): any => {
         preBits.push(null);
     }
 
-    fillIgnoreMask();
+    createIgnoreMask();
 
+    readBitsFromQrString(rows);
+
+    visualizeBytes(preBits);
+
+    const patternIndex = getPatternIndex();
+    const groups = initGroups();
+
+    let readBits = readAllBytes(patternIndex);
+
+    deinterleaveBytes(readBits, groups);
+
+    validateEncoding();
+
+    const length = getLength();
+
+    let output = "";
+
+    for (let i = 0; i < length; i++) {
+        output += String.fromCharCode(readBitNumber(12 + i * 8, 8));
+    }
+
+    return output;
+};
+
+function readBitsFromQrString(rows: string[]) {
     for (let i = 0; i < rows.length; i++) {
         let row = rows[i];
         for (let j = 0; j < rowLength; j++) {
@@ -72,36 +94,13 @@ export default (context: Context, args?: any): any => {
             }
         }
     }
-    // Remove last row cause it doesn't exist
-    // console.log(preBits.splice(-rowLength, rowLength));
-
-    visualizeBytes(preBits);
-
-    let patternIndex = getPatternIndex();
-    initGroups();
-
-    readAllBytes(patternIndex);
-
-    deinterleaveBytes();
-
-    validateEncoding();
-
-    let length = getLength();
-
-    let output = "";
-
-    for (let i = 0; i < length; i++) {
-        output += String.fromCharCode(readBitNumber(12 + i * 8, 8));
-    }
-
-    return output;
-};
+}
 
 function getLength(): number {
     return readBitNumber(4, 8);
 }
 
-function initGroups(): void {
+function initGroups(): number[][] {
     const codewordGroups = [
         // ...
         [ // 8
@@ -124,6 +123,7 @@ function initGroups(): void {
     const ecLevelToIndex = [1, 0, 3, 2]; // M, L, H, Q
     const ecIndex = ecLevelToIndex[errorCorrectionLevel];
 
+    let version: number;
     switch (rowLength) {
         case 49:
             version = 8;
@@ -131,64 +131,63 @@ function initGroups(): void {
         case 53:
             version = 9;
             break;
+        default:
+            throw new Error(`Invalid row length: ${rowLength}. Unsupported version.`);
     }
 
-    groups = codewordGroups[version - 8][ecIndex];
+    const groups = codewordGroups[version - 8][ecIndex];
 
     totalDataCodewords = groups.reduce((sum, [blocks, codewords]) => sum + blocks * codewords, 0);
+
+    return groups;
 }
 
-function readAllBytes(patternIndex: number): void {
-    let readPosX = rowLength - 1;
-    let readPosY = rowLength - 1;
-    let upDir = true;
+function readAllBytes(patternIndex: number): number[] {
+    let readX = rowLength - 1;
+    let readY = rowLength - 1;
+    let upDir = -1;
+    const readBits = [];
 
     for (let i = totalDataCodewords * 8; i > 0; i--) {
-        if (!ignoreMask[readPosY][readPosX]) {
-            let readBit = preBits[readPosY * rowLength + readPosX];
+        if (ignoreMask[readY][readX]) {
+            i++;
+        } else {
+            let readBit = preBits[readY * rowLength + readX];
 
             if (readBit === null) {
-                throw new Error(`Null value at ${readPosX}, ${readPosY}`);
+                throw new Error(`Null value at ${readX}, ${readY}`);
             }
 
-            readBit = doesHitPattern(readPosX, readPosY, patternIndex) ? readBit ^ 1 : readBit;
+            readBit = doesHitPattern(readX, readY, patternIndex) ? readBit ^ 1 : readBit;
 
             readBits.push(readBit);
-        } else {
-            i++;
         }
 
-        if (readPosX % 2 == 0) {
+        if (readX % 2 == 0) {
             // Go left
-            readPosX--;
+            readX--;
         } else {
             // Go up
-            if (upDir) {
-                readPosY--;
-            } else {
-                readPosY++;
-            }
+            readY += upDir;
             // Go right
-            readPosX++;
+            readX++;
         }
 
         // If out of bounds
-        if (readPosY < 0 || readPosY >= rowLength) {
-            upDir = !upDir;
+        if (readY < 0 || readY >= rowLength) {
+            upDir *= -1;
             // Go up
-            if (upDir) {
-                readPosY--;
-            } else {
-                readPosY++;
-            }
+            readY += upDir;
 
             // Move two left
-            readPosX -= 2;
+            readX -= 2;
         }
     }
+
+    return readBits;
 }
 
-function deinterleaveBytes(): void {
+function deinterleaveBytes(readBits: number[], groups: number[][]): void {
     let groupData = Array.from({ length: groups.length }, () => []);
     for (let i = 0; i < groups.length; i++) {
         let [blocks, codewords] = groups[i];
@@ -281,7 +280,6 @@ function doesHitPattern(x: number, y: number, patternIndex: number): boolean {
 
 function visualizeBytes(bytes: (number | null)[]) {
     let output = "";
-    console.log(bytes.length);
 
     for (let i = 0; i < bytes.length; i++) {
         if (i % rowLength == 0) {
@@ -302,7 +300,7 @@ function visualizeBytes(bytes: (number | null)[]) {
     console.log(output);
 }
 
-function fillIgnoreMask() {
+function createIgnoreMask() {
     const setRectangle = (startX, startY, endX, endY) => {
         for (let y = startY; y <= endY; y++) {
             for (let x = startX; x <= endX; x++) {
@@ -318,16 +316,6 @@ function fillIgnoreMask() {
     setRectangle(end - 10, 0, end, 6);
     setRectangle(end - 7, 6, end, 8);
     setRectangle(8, 6, end - 10, 6);
-
-    let center = null;
-    switch (version) {
-        case 8:
-            center = [24, 42 + 2];
-            break;
-        case 9:
-            center = [26 - 2, 46 - 2];
-            break;
-    }
 
     const alignmentPositions = [
         [4, Math.floor(rowLength / 2)],
