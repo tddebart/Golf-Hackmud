@@ -1,51 +1,53 @@
 let preBits: (number|null)[] = [];
 let readBits: number[] = [];
-let deleafedBytes: number[] = [];
-let patternIndex;
-let errorCorrectionLevel;
+let deleafedBits: number[] = [];
 let rowLength = 49;
 let groups: number[][] = [];
 let totalDataCodewords: number = 0;
+let version = 8;
 
 let ignoreMask: boolean[][] = [];
 
 export default (context: Context, args?: any): any => {
     let qrCode = `
-█▀▀▀▀▀█ ▄▀█▀▄▄ ▀ ▀▀█▄ ▀▄▄▀▄▄▄█  █ ██▄▀▄▄█ █▀▀▀▀▀█
-█ ███ █ █▄▀▀▄█    ▀▀▄▀▄▀ █▄▀ █ ▀██ ▄ █ █▀ █ ███ █
-█ ▀▀▀ █ █  █▄▄▄▄▄ ▀████▀▀▀█▄ █ ▄▀ █▀  ▄   █ ▀▀▀ █
-▀▀▀▀▀▀▀ ▀ █▄█▄█▄█ ▀ █ █ ▀ █ █▄▀▄█ █ ▀ █ ▀ ▀▀▀▀▀▀▀
- ▄█▄▄▀▀▀▀▀███▄▄█ ▄▀▀▀▀▀█▀██ ▀▀  █▄▀ ▄▀ ▀ █ █▀▀▀▀▄
-▄  ▄  ▀▀█▄█▀▀ █▀▀█ ▄▀ █▀ ▀▄▀▀▀▀█▄▄ ▄▄▀ ▀    █   █
-█▀██▄▄▀▀▀█▄   ▄ ▄ ▀▀▄ ▀█▀ ▀▀█▀█  █▀ █ ▀▀ █ ▀█▀▄ ▄
-  ▄▀▀▀▀▄▀▄  ▀ ▀█▄▀█ ▀ █▄▀█ ▄    ▀  ▀█▀ ▀▄█▄██ ▀▄█
-██ ▀ █▀██▄ ██▀▀ █▀ ▀ █ █▄█▀ ▄██▀▄ ▀ ▀ ▀███▄▄▀▀▄▀█
-█▄▀█▀▀▀▄▄▀ █▄ ▀█▀▀█▀█▄   ▄ ██▀ ▀█▄▀▀█ ▀█▄█▀ █  ▀█
- ▄█▀ ▄▀▀▀▀▄███▀▀▄▀▄    ▀▀▀ ▄ █▄▀▀█ ▄█▀ ▄ ▀▀▄▀█▄██
-▀▀ ▀█▀▀▀█  ▀▀▀ █▄█▀██▀█▀▀▀█▀ █▄▀▀█▄▀▄  ▀█▀▀▀█▀▀▄▀
-▄ ▄ █ ▀ █ ▄▄██▄▀█▀█▀▀██ ▀ █ ▄▀  ▄▄  █▀ ██ ▀ ██ █▄
-▀ █▀█▀▀█▀▀▄ ██  █▄█▄▄▀█▀█▀█▄▀█▀ ▄▄▄██  ▄▀▀█▀█▄▀ █
-▄ ▄ █▀▀█ ▄█ █▄▀▀██ ▀        ▀█▄▄██  █▄▀█▀██▀▀█▄▄▄
-▄▄ ▀█ ▀ █▀ █▄█▄  █▄▀▄▄▄▄▀▀█▄ █▄▄ █ █▀▀ █▄ █▄█▄ ▄▀
-▀▀██▄ ▀▄▄▄▄▀▄▀▄▄▀▄▄ ▀▀▀▀ ▄▄ █  █▀█▀█▀▀ █▀  ▀    ▄
-▄█ █▀ ▀▀▄▄▄▄▄█▀▀▄ ▄█▄▀█▀█▀▀▄▀▄▀▀██ ▀█  █▄▀███▀ ▄█
-█▄██▀▄▀█▀▄█▄█▀▀█▀▄ ▀   █▄█▄▀▀   ▀█▀▀█▀ ▀▄███ ▀ ▄▄
- █▄▄ ▀▀▄▄▀ ▄▄█▄▀▀▄████▀█▀█▀▄▀▀▄ ▄█▄▀▄▄▄█ ▀██▀█ ▄▀
-▀▀▀   ▀ █ ▀▄▄█   █  ▄▄█▀▀▀██▄▀▄▄▀█▄███▄▀█▀▀▀█   █
-█▀▀▀▀▀█ ██▀█ ▀▄ ▀█ ▀ ▄█ ▀ ██▀▀ ▄▀▀▀▀█▀▀ █ ▀ ██ ██
-█ ███ █   ▀▀▀▀█▄▄  ▀▀▀██▀▀▀▀▀ ▀▄██ ▄██▀█▀█▀▀█▀  ▀
-█ ▀▀▀ █ ▀▀▄ ▄█ █  ▀▄█ ▄▀▄ ▄██ ▄▄█▄ ▀█▀▄█▀▀▀▀▀█  ▀
-▀▀▀▀▀▀▀     ▀  ▀▀ ▀▀ ▀▀▀▀▀▀▀  ▀ ▀▀▀▀▀▀ ▀▀   ▀   ▀`;
+█▀▀▀▀▀█    ▄▄▀ ▄ ▄▀▄▄▄▀▀▀▀▀ █▀▀▀▄▀█▀▄  █▄ █▄  █▀▀▀▀▀█
+█ ███ █  ▀█▀▄▀▄▄▀█▀ ▄ ██   ▄█▀▄▀ ▀▀▄   ▄ ▄▄▀▄ █ ███ █
+█ ▀▀▀ █ ▀▀  ▀▀█ ▄▀▀▀▀▀█▀█▀▀▀█  ▀  ▄████ █▄█   █ ▀▀▀ █
+▀▀▀▀▀▀▀ █▄█ ▀▄▀ ▀ ▀ ▀▄█▄█ ▀ █▄▀▄▀▄█▄█ █ █ ▀▄█ ▀▀▀▀▀▀▀
+▄▄▀▀▄▄▀█▀██▄▀▀  ▀ ▄▄ ▀▀██▀▀██▀▄ █ ▄▄▄▄▀█▀█▄ ▀▀▀▄█  ▄▄
+▀▄█ ▄█▀▀▀▄▀▀▄▀▄▄▄▀ ▀█ ▄ ▄▄█▄█▄ ▄█ █▀▄▄   ██▄ ▄█ █▀ ▀ 
+██▄▀▄▄▀▀█ ▄█▄ ▄█▀▄▀ ▀▀▀▀ █▄▄███ ▀▄█ █ █ ▄▀ ██▄ ▄▀ ▀ █
+█ ██▄▀▀█▀▄▀█ ▀███▀▄▄▄▄  █▄  █▄▀▄▄▀█  ▀▀▄▄ █▀▀█▄▀ ▀▀▀█
+  █▄█▄▀▀▄█▄ █  ▀▀▄█▀ ███ ▀█ ▀ █▄▀ █▄▄   ▄█   █▄  ▄ ▄ 
+▄▀▀▄▀▀▀▄▄█ ▀▀ ▄▀ █▄  ▄▄ █  ▀█▄▄█ ▀▄█▀██▄██ ▄▀████▄█▄ 
+▄▀▀ █ ▀▄██▀█▄█ ▄█▄▀▄ ▄▄█     ▄▄▄ ▀█▄▄  ▀▀▄█▄▀▄▀█▄▀▀ █
+▄▀▄  ▄▀▄█▀▄▄▄ ▄█▀ ▀▄▀█ ▄▀▄  ▄▄  ▄█▀▄█▄▄▀ █▀▀▄▄███▀   
+▄▀▄▄█▀▀▀█  ▀▀██▀▀ ▄ ▄▄▀ █▀▀▀█▄▄▀▀▄█▀▀██▄ █ ▄█▀▀▀█ ▀▀▄
+▀▄  █ ▀ █▄ ▄█▀██ █     ▄█ ▀ ██▄▀█  ▄▀▀▀ █ █▀█ ▀ █▀▀█▀
+▄█▀▄▀▀▀██▄█▀▄▄█▀▀▀ ▄▀▄▄▄█▀██▀▄█▄██▄▄ ▄ █ ▀▀█████▀▄▄▄ 
+▀▀▀█▄▄▀▀▀▀▀▄▀▀██▄ ▄ ▄▄▀▀█▀ ▀▄▄▀▄▀▀▄ ▄▀█ ██▄ ▀▄▄ ▀▀█▄▄
+▄  █▀█▀▀▀▄█ █▀█▀▀ ███▄▄██▀▄ █ ▄▀▄▄▀▀▄█▀▄█ ████▄ █▀█▀▄
+ ▄ █ ▄▀█▀▄  ▄▀▄█▀▄ █▄█▀ ▀█▀▀▀▄▄█ ▄▄▀▄▀ ▄ ▀▀ █▀ ▀▀█   
+▀█▀█▄ ▀ ▀█▀ ▄▄▀▄▄▄  ▀██▀██▀▀▄▀█▀▀▀█ ██▄▄ ▀ ▄█▀▀  ▄▀▀▄
+█▄▄█▀▀▀█ ▀▄  █▀█▀▀▄▀ ▀▄▄ ▀▄▄▄█▀█▀█    █▀█▄█████ █▄▀▀▀
+█  ▀▄█▀▀███▄▄▀ ▀▄▀▄   ▀ █  ▄▀█▀█ ▀▀  █ ▀ ▀  ▀ ▄█▀█▄  
+▀█▄▀▀▀▀▄ ███▀ ▄▀▀ █▄▄ █▄ ▄ ▀▀▄▀█ █▄▄█ █▀▄ ▄▄▄ ▄▄ ██ ▄
+   ▀  ▀ █▀█ █▀▄▄ ▀▄▄▄ ▄▀█▀▀▀█▀ ▄ █   █ █▀▄█▀█▀▀▀█▀▀▄█
+█▀▀▀▀▀█ ▀█ ▄ ▄██▀▄ ▀▄▄ ██ ▀ █▄ ▄▄▀▀██   ▀▀▀ █ ▀ █  █▄
+█ ███ █ ▄▀▄▀█▄ ▀▀▀ █▄▀▄▀▀▀█▀█▀ ▀   ▄▀▄▄▀▄ ▀▄▀▀████▀▀█
+█ ▀▀▀ █ ▀█▀▀▀█ ▄▄▄▀▄█  █▀ ▀ ▄█▄ ▀█ █ ▀▀▄█▄██▄▀▀█ █ █▀
+▀▀▀▀▀▀▀  ▀▀▀▀▀ ▀ ▀    ▀ ▀▀  ▀▀▀▀       ▀ ▀ ▀▀ ▀ ▀  ▀ `;
+
+    // Get rowLength
+    let rows = qrCode.slice(1).split("\n");
+    rowLength = rows[0].length
 
     // Initialize empty array
-    for (let i = 0; i < qrCode.length*2; i++) {
+    for (let i = 0; i < rowLength*rowLength; i++) {
         preBits.push(null);
     };
 
     fillIgnoreMask();
-
-    // Fill array
-    let rows = qrCode.slice(1).split("\n");
 
     for (let i = 0; i < rows.length; i++) {
         let row = rows[i];
@@ -72,15 +74,14 @@ export default (context: Context, args?: any): any => {
         }
     }
     // Remove last row cause it doesn't exist
-    preBits.splice(-rowLength, rowLength);
+    // console.log(preBits.splice(-rowLength, rowLength));
 
     visualizeBytes(preBits)
 
-    patternIndex = getPatternIndex();
-    errorCorrectionLevel = getErrorCorrectionLevel();
+    let patternIndex = getPatternIndex();
     initGroups();
 
-    readAllBytes();
+    readAllBytes(patternIndex);
 
     deinterleaveBytes();
 
@@ -110,30 +111,49 @@ function initGroups(): void {
             [[4,18],[2,19]], // Q
             [[4,14],[2,15]], // H
         ],
+        [ // 9
+            [[2, 116]],       // L
+            [[3, 36],[2,37]], // M
+            [[4, 16],[4,17]], // Q
+            [[4, 12],[4,13]], // H
+        ],
         // ...
     ];
 
+    const errorCorrectionLevel = getErrorCorrectionLevel();
     // the ec levels are not in order for some reason
     const ecLevelToIndex = [1, 0, 3, 2]; // M, L, H, Q
     const ecIndex = ecLevelToIndex[errorCorrectionLevel];
 
-    groups = codewordGroups[0][ecIndex];
+    switch (rowLength) {
+        case 49: version = 8; break;
+        case 53: version = 9; break;
+    }
+
+    groups = codewordGroups[version-8][ecIndex];
 
     totalDataCodewords = groups.reduce(
         (sum, [blocks, codewords]) => sum + (blocks * codewords), 0
     );
 }
 
-function readAllBytes(): void {
-    let readPosX = 48;
-    let readPosY = 48;
+function readAllBytes(patternIndex: number): void {
+    let readPosX = rowLength-1;
+    let readPosY = rowLength-1;
     let upDir = true;
 
     for (let i = totalDataCodewords*8; i > 0; i--) {
-        // console.log(`${readPosX},${readPosY}`);
 
         if (!ignoreMask[readPosY][readPosX]) {
-            readBits.push(readBitAtPos(readPosX, readPosY));
+            let readBit = preBits[readPosY * rowLength + readPosX];
+
+            if (readBit === null) {
+                throw new Error(`Null value at ${readPosX}, ${readPosY}`);
+            }
+
+            readBit = doesHitPattern(readPosX, readPosY, patternIndex) ? readBit ^ 1 : readBit;
+
+            readBits.push(readBit);
         } else {
             i++
         }
@@ -153,7 +173,7 @@ function readAllBytes(): void {
         }
 
         // If out of bounds
-        if (readPosY < 0 || readPosY >= 49) {
+        if (readPosY < 0 || readPosY >= rowLength) {
             upDir = !upDir;
             // Go up
             if (upDir) {
@@ -205,7 +225,7 @@ function deinterleaveBytes(): void {
 
     console.log(groupData);
 
-    deleafedBytes = groupData.flat(3).map((x: number) => x.toString(2).padStart(8, '0').split('')).flat().map(x => parseInt(x));
+    deleafedBits = groupData.flat(3).map((x: number) => x.toString(2).padStart(8, '0').split('')).flat().map(x => parseInt(x));
 }
 
 function validateEncoding(): void {
@@ -215,38 +235,28 @@ function validateEncoding(): void {
     }
 }
 
-function readBitAtPos(x: number, y: number): number {
-    let value = preBits[y*rowLength+x];
-
-    if (value === null) {
-        throw new Error(`Null value at ${x}, ${y}`);
-    }
-
-    return doesHitPattern(x, y) ? value ^ 1 : value;
-}
-
 function readBitNumber(index: number, length: number): number {
-    let value = deleafedBytes.slice(index, index+length).join('');
+    let value = deleafedBits.slice(index, index+length).join('');
     return parseInt(value, 2);
 };
 
 
 function getPatternIndex(): number {
-    let patternBit3 = preBits[46*rowLength+8] ^ 1;
-    let patternBit2 = preBits[45*rowLength+8] ^ 0;
-    let patternBit1 = preBits[44*rowLength+8] ^ 1;
+    let patternBit3 = preBits[(rowLength-3)*rowLength+8] ^ 1;
+    let patternBit2 = preBits[(rowLength-4)*rowLength+8] ^ 0;
+    let patternBit1 = preBits[(rowLength-5)*rowLength+8] ^ 1;
 
     return parseInt(`${patternBit3}${patternBit2}${patternBit1}`, 2);
 }
 
 function getErrorCorrectionLevel(): number {
-    let patternBit2 = preBits[48*rowLength+8] ^ 1;
-    let patternBit1 = preBits[47*rowLength+8] ^ 0;
+    let patternBit2 = preBits[(rowLength-1)*rowLength+8] ^ 1;
+    let patternBit1 = preBits[(rowLength-2)*rowLength+8] ^ 0;
 
     return parseInt(`${patternBit2}${patternBit1}`, 2);
 }
 
-function doesHitPattern(x: number, y: number): boolean {
+function doesHitPattern(x: number, y: number, patternIndex: number): boolean {
     switch (patternIndex) {
         case 0:
             return (x + y) % 2 == 0;
@@ -265,14 +275,18 @@ function doesHitPattern(x: number, y: number): boolean {
 
 function visualizeBytes(bytes: (number|null)[]) {
     let output = "";
+    console.log(bytes.length);
+
     for (let i = 0; i < bytes.length; i++) {
-        if (i % 49 == 0) {
+        if (i % rowLength == 0) {
             output += "\n";
         }
 
         const debugVis = false;
 
-        if (debugVis && ignoreMask[Math.floor(i / 49)][i % 49]) {
+        // console.log(Math.floor(i / rowLength));
+
+        if (debugVis && ignoreMask[Math.floor(i / rowLength)][i % rowLength]) {
             output += "L";
         } else {
             output += bytes[i] ? "█" : " ";
@@ -291,24 +305,31 @@ function fillIgnoreMask() {
         }
     }
 
-    ignoreMask = Array.from({length: rowLength}, () => Array(rowLength).fill(false));
+    ignoreMask = Array.from({length: rowLength+1}, () => Array(rowLength+1).fill(false));
+
 
     const end = rowLength-1;
 
     setRectangle(end-10, 0, end, 6);
     setRectangle(end-7, 6, end, 8);
-    setRectangle(9, 6, end-10,6);
+    setRectangle(8, 6, end-10,6);
+
+    let center = null;
+    switch (version) {
+        case 8: center = [24, 42+2]; break;
+        case 9: center = [26-2, 46-2]; break;
+    }
 
     const alignmentPositions = [
-        [22, 4],
-        [4, 22],
-        [22, 22],
-        [40, 22],
-        [22, 40],
-        [40, 40],
+        [4, Math.floor(rowLength/2)],
+        [Math.floor(rowLength/2),  Math.floor(rowLength/2)],
+        [rowLength-7, Math.floor(rowLength/2)],
+        [Math.floor(rowLength/2), rowLength-7],
+        [Math.floor(rowLength/2), 6],
+        [rowLength-7, rowLength-7],
     ]
 
     for (const pos of alignmentPositions) {
-        setRectangle(pos[0], pos[1], pos[0]+4, pos[1]+4);
+        setRectangle(pos[0]-2, pos[1]-2, pos[0]+2, pos[1]+2);
     }
 }
