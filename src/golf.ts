@@ -52,7 +52,7 @@ const terminalHeight = mapHeight + mapHeightOffset;
 const map: string[][] = [];
 const drawBuffer: string[][] = [];
 
-let mapData: MapData = null;
+let mapData: MapData =  null;
 let session: Session = null;
 
 const startScreen = `
@@ -68,8 +68,8 @@ const startScreen = `
 
 Welcome to coolmath.golf.
 
-For rules and instructions see \`Nrules\`:\`Vtrue\`
-To start a new game see view the current maps with \`Nmaps\`:\`Vtrue\` and start with \`Nstart\`:\`VmapId\`
+For rules and instructions \`Nview\` \`Vrules\`
+To start a new game \`Nview\` the current maps with \`Vmaps\` and start with \`Nstart\`:\`VmapId\`
 `;
 
 export default (context: Context, args?: any): returnType => {
@@ -85,8 +85,11 @@ export default (context: Context, args?: any): returnType => {
     }
 
     // Show rules on rules:true
-    if (args?.rules) {
+    if (args?.view == "rules") {
         return showRules();
+    }
+    if (args?.view == "maps") {
+        return showMaps();
     }
 
     // Insert a new map if we are script owner
@@ -164,10 +167,23 @@ Have fun!
 `;
 }
 
+function showMaps(): string {
+    let maps = $db.f({ type: "golf_map" }).array() as MapData[];
+    // Make list unique by mapId
+    maps = maps.filter((value, index, self) => self.findIndex((t) => t.mapId === value.mapId) === index);
+
+    let out = "Maps:\n";
+    for (const map of maps) {
+        out += `${map.mapId} - ${map.courseName}\n`;
+    }
+
+    return out;
+}
+
 function insertMap(insertData: object): returnType {
     let insertedMapData = insertData as MapData;
 
-    if (insertedMapData.type !== "golf_map" || insertedMapData._id == undefined) {
+    if (insertedMapData.type !== "golf_map") {
         return { ok: false, msg: "Invalid map data" };
     }
 
@@ -205,7 +221,7 @@ function getMapData(): MapData | null {
     }
 
     let foundMapData = $db
-        .f({ type: "map", mapId: session.mapId, holeNumber: session.holeNumber })
+        .f({ type: "golf_map", mapId: session.mapId, holeNumber: session.holeNumber })
         .first() as MapData | null;
 
     if (foundMapData == null) {
