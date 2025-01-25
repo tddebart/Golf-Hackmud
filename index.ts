@@ -23,6 +23,9 @@ global.$fs = {
                 caller_is_owner: () => true
             }
         }
+    },
+    coolmath: {
+        golf: (args) => golf(context, args)
     }
 }
 

@@ -9,6 +9,7 @@ type MapData = {
     courseName: string;
     holeNumber: number;
     totalHoleCount: number;
+    par: number;
     readonly type: "golf_map";
 };
 
@@ -22,6 +23,7 @@ type Session = {
     mapId: number;
     holeNumber: number;
     ballPos: Point;
+    prevBallPos: Point;
     lastUpdate: number;
     courseScores: number[];
     strokeCount: number;
@@ -41,6 +43,7 @@ const putGreen = "`M▓`";
 const fairwayGreen = "`L▓`";
 const bunkerSand = "`I▒`";
 const darkGreen = "`l░`";
+const prevBallColor = "`R░`";
 const ballColor = "`R█`";
 const holeColor = "`X▓`";
 
@@ -54,6 +57,7 @@ const drawBuffer: string[][] = [];
 
 let mapData: MapData =  null;
 let session: Session = null;
+let alert: string = "";
 
 const startScreen = `
 \`H  ▄██████▄   ▄██████▄   ▄█          ▄████████\`
@@ -115,6 +119,8 @@ export default (context: Context, args?: any): returnType => {
                 return "Are you sure you want to start a new game? This will end your current session and is not reversible. To continue, type `Nconfirm`:`Vtrue`";
             } else {
                 resetGame();
+
+                return $fs.coolmath.golf(args);
             }
         } else {
             // We are not in a game so start a new one without confirmation
@@ -126,14 +132,97 @@ export default (context: Context, args?: any): returnType => {
     mapData = getMapData();
 
     // Show start screen if we have no valid map
-    if (!args || session.mapId == -1) {
+    if (session.mapId == -1) {
         return startScreen;
     }
 
+    drawGround();
+    // Calculate the shot
+    if (args?.angle != undefined || args?.power != undefined) {
+        if (args?.angle != undefined && args?.power != undefined) {
+            if (args.angle < -360 || args.angle > 360) {
+                return "Angle must be between -360 and 360";
+            }
+
+            if (args.power < 0 || args.power > 100) {
+                return "Power must be between 0 and 100";
+            }
+
+            if (calculateShot(args.angle, args.power)) {
+                return $fs.coolmath.golf()
+            };
+        } else {
+            return "You must specify both an `Nangle` and a `Npower`";
+        }
+    }
     draw();
 
     return drawBufferToString();
 };
+
+// Returns true if the shot was a success into the hole
+function calculateShot(angle: number, power: number): boolean {
+    session.strokeCount += 1;
+    session.prevBallPos = clone(session.ballPos);
+    let pos = clone(session.ballPos);
+
+    power /= 2;
+    // If we are in a bunker we reduce the power by 20%
+    if (map[pos.y][pos.x] == bunkerSand) {
+        power *= 0.8;
+    }
+    // Multiply by a random factor from 0.9 to 1.1 so it is not always the same
+    power *= Math.random() * 0.2 + 0.9;
+    power = Math.round(power);
+
+    let angleRadians = (angle-90) * (Math.PI / 180);
+    let dx = Math.cos(angleRadians) * power;
+    let dy = Math.sin(angleRadians) * power;
+
+    let endPos = {
+        x: Math.round(pos.x + dx),
+        y: Math.round(pos.y + dy),
+    } as Point;
+
+    // Clamp the position
+    endPos.x = Math.max(0, Math.min(mapWidth-1, endPos.x));
+    endPos.y = Math.max(0, Math.min(mapHeight-1, endPos.y));
+
+    let points = getCoordsBetweenPoints(pos, endPos);
+
+    // If we went over the hole and landed really close to it we count as a success
+    if (points.some(p => p.x == mapData.endPoint.x && p.y == mapData.endPoint.y) && distance(mapData.endPoint, endPos) <= 2) {
+        // We are in the hole
+        const successMessages = [
+            "Congratulations! You made it to the hole!",
+            "Well done! You made it to the hole!",
+            "Amazing shot! You made it to the hole!",
+            "Nice work! You sank the putt!",
+            "You did it! You made it to the hole!",
+            "Wow, I guess you made it to the hole.",
+        ]
+
+        const message = successMessages[Math.floor(Math.random() * successMessages.length)];
+
+        alert = `\`L${message}\` - ${strokeToGolfTerm()}`;
+
+        session.courseScores[session.holeNumber] = session.strokeCount;
+        session.holeNumber += 1;
+        session.strokeCount = -1;
+
+        return true;
+    }
+
+    if (map[endPos.y][endPos.x] == darkGreen) {
+        // Out of bounds
+        session.prevBallPos = clone(endPos);
+        alert = "`DYou went out of bounds! Try again!`";
+    } else {
+        session.ballPos = endPos;
+    }
+
+    return false;
+}
 
 function correctWidthAndHeight(columns: number, rows: number): boolean {
     if (columns < terminalWidth || rows < terminalHeight + 4) {
@@ -160,8 +249,8 @@ The goal of the game is to get the ball into the hole in the least number of str
 - Each time you move the ball, you will be charged a stroke.
 - If you put the ball in the hole, you will be rewarded with the number of strokes it took to get there.
 
-The map will end when you get the ball into the hole or if you run out of moves. You will then go to the next hole.
-On the last hole the game ends you will get your final score. You can see how many holes there are on the right side while playing the game.
+The hole will end when you get the ball into the hole or if you run out of moves. You will then go to the next hole.
+On the last hole of the game ends you will get your final score. You can see how many holes there are on the right side while playing the game.
 
 Have fun!
 `;
@@ -204,6 +293,7 @@ function getSession(userName: string): Session {
             mapId: -1,
             holeNumber: 0,
             ballPos: { x: 0, y: 0 },
+            prevBallPos: { x: 0, y: 0 },
             lastUpdate: Date.now(),
             strokeCount: 0,
             courseScores: [],
@@ -236,9 +326,13 @@ function getMapData(): MapData | null {
     // Setup session if we just started
     if (session.strokeCount == -1) {
         session.strokeCount = 0;
+        session.prevBallPos = foundMapData.startPoint;
         session.ballPos = foundMapData.startPoint;
-        for (let i = 0; i < foundMapData.totalHoleCount; i++) {
-            session.courseScores[i] = 0;
+
+        if (session.holeNumber == 0) {
+            for (let i = 0; i < foundMapData.totalHoleCount; i++) {
+                session.courseScores[i] = 0;
+            }
         }
     }
 
@@ -257,9 +351,7 @@ function startGame(mapId: number): void {
 }
 
 function resetGame(): void {
-    session.mapId = -1;
-
-    updateDBSession();
+    $db.r({ _id: session._id });
 }
 
 function updateDBSession(): void {
@@ -267,7 +359,7 @@ function updateDBSession(): void {
 }
 
 //#region drawing
-function draw(): void {
+function drawGround(): void {
     for (let y = 0; y < terminalHeight; y++) {
         drawBuffer[y] = [];
         for (let x = 0; x < terminalWidth; x++) {
@@ -292,7 +384,9 @@ function draw(): void {
         drawCoords(mapData.bunkerCoords[i], bunkerSand);
         fillCoords(mapData.bunkerCoords[i], bunkerSand);
     }
+}
 
+function draw(): void {
     // Draw start point
     for (let i = mapData.startPoint.y - 1; i <= mapData.startPoint.y + 1; i++) {
         for (let j = mapData.startPoint.x - 1; j <= mapData.startPoint.x + 1; j++) {
@@ -302,6 +396,7 @@ function draw(): void {
         }
     }
 
+    map[session.prevBallPos.y][session.prevBallPos.x] = prevBallColor;
     map[session.ballPos.y][session.ballPos.x] = ballColor;
     map[mapData.endPoint.y][mapData.endPoint.x] = holeColor;
 
@@ -343,6 +438,15 @@ function isInPolygon(x: number, y: number, coords: Point[]): boolean {
 }
 
 function drawLine(point1: Point, point2: Point, color: string): void {
+    let coords = getCoordsBetweenPoints(point1, point2);
+    for (const coord of coords) {
+        map[coord.y][coord.x] = color;
+    }
+}
+
+function getCoordsBetweenPoints(point1: Point, point2: Point): Point[] {
+    const coords: Point[] = [];
+
     const dx = Math.abs(point2.x - point1.x);
     const dy = Math.abs(point2.y - point1.y);
     const sx = point1.x < point2.x ? 1 : -1;
@@ -352,7 +456,7 @@ function drawLine(point1: Point, point2: Point, color: string): void {
     let y = point1.y;
 
     while (true) {
-        map[y][x] = color;
+        coords.push({ x, y });
         if (x === point2.x && y === point2.y) {
             break;
         }
@@ -366,6 +470,8 @@ function drawLine(point1: Point, point2: Point, color: string): void {
             y += sy;
         }
     }
+
+    return coords;
 }
 
 // #region Sidebar
@@ -400,6 +506,12 @@ function drawSideBar(): void {
     let strokeCountText = `Stroke: ${session.strokeCount.toString().padStart(2, "0")}`;
     for (let i = 0; i < strokeCountText.length; i++) {
         drawBuffer[mapHeightOffset + 6][mapWidth + 2 + i] = strokeCountText[i];
+    }
+
+    // Draw par
+    let parText = `Par: ${mapData.par.toString().padStart(2, "0")}`;
+    for (let i = 0; i < parText.length; i++) {
+        drawBuffer[mapHeightOffset + 7][mapWidth + 3 + i] = parText[i];
     }
 
     // Draw course scores
@@ -443,7 +555,14 @@ function drawMap(): void {
 function drawBufferToString(): string {
     let output = "";
 
-    for (let y = 0; y < terminalHeight; y++) {
+    let startHeight = 3;
+    output += "You can `Nview` the `Vrules`. Or you can reset the game with reset: true\nTake a shot with `Nangle`:`V(-360 to 360)` and `Npower`:`V(0 to 100)`\n\n";
+    if (alert !== "") {
+        output += alert;
+        startHeight+=1;
+    }
+
+    for (let y = startHeight; y < terminalHeight; y++) {
         for (let x = 0; x < terminalWidth; x++) {
             output += drawBuffer[y][x];
         }
@@ -457,6 +576,45 @@ function drawBufferToString(): string {
 
 function logError(msg: string): void {
     throw new Error(
-        msg + "\nIf you think this was a error, please report this to me with chats.tell",
+        msg + "\nIf you think this was a error, please report this to me with chats.tell or to @boss_sloth_inc in the hackmud discord.",
     );
+}
+
+function clone<T>(obj: T): T {
+    return JSON.parse(JSON.stringify(obj)) as T;
+};
+
+function distance(point1: Point, point2: Point): number {
+    return Math.sqrt((point1.x - point2.x) ** 2 + (point1.y - point2.y) ** 2);
+}
+
+function strokeToGolfTerm(): string
+{
+    let strokes = session.strokeCount;
+    let par = mapData.par;
+
+    if (strokes == 1) {
+        return "Hole in one";
+    }
+
+    switch (strokes - par) {
+        case -3:
+            return "Albatross";
+        case -2:
+            return "Eagle";
+        case -1:
+            return "Birdie";
+        case 0:
+            return "Par";
+        case 1:
+            return "Bogey";
+        case 2:
+            return "Double Bogey";
+        case 3:
+            return "Triple Bogey";
+        case 4:
+            return "Quadruple Bogey";
+        default:
+            return `${strokes} strokes`;
+    }
 }

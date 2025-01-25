@@ -32,7 +32,7 @@ function remove(query: Query) {
     let items = find(query).array();
     for (const item of items) {
         let index = localData.indexOf(item);
-        delete localData[index];
+        localData.splice(index, 1);
     }
 }
 
